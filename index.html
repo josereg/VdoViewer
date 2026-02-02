@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Ninja Pro</title>
+    <style>
+        body { margin: 0; padding: 0; background: #000; color: #eee; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        
+        /* Barra de herramientas superior */
+        #toolbar { 
+            background: #222; 
+            padding: 10px; 
+            display: flex; 
+            justify-content: center; 
+            gap: 15px;
+            border-bottom: 1px solid #444;
+        }
+
+        iframe { width: 100vw; flex-grow: 1; border: none; display: none; }
+        
+        button { 
+            padding: 8px 15px; 
+            font-size: 14px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 4px; 
+            transition: 0.3s;
+        }
+
+        .btn-off { background: #555; color: white; }
+        .btn-on { background: #28a745; color: white; }
+        .btn-alert { background: #dc3545; color: white; }
+
+        #setup-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        .alert-active { border: 5px solid red !important; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar">
+        <button id="btnNotify" class="btn-on">🔔 Activar Notificaciones</button>
+        <button id="btnSound" class="btn-off">🔈 Sonido: OFF</button>
+    </div>
+
+    <div id="setup-msg">Esperando parámetros de sesión en la URL...</div>
+
+    <iframe id="ninjaFrame" allow="autoplay; camera; microphone; fullscreen"></iframe>
+
+    <audio id="audioAlerta" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
+    <script>
+        const urlParams = window.location.search;
+        const frame = document.getElementById('ninjaFrame');
+        const setupMsg = document.getElementById('setup-msg');
+        const btnNotify = document.getElementById('btnNotify');
+        const btnSound = document.getElementById('btnSound');
+        const audio = document.getElementById('audioAlerta');
+
+        let soundEnabled = false;
+        let lastAlert = 0;
+
+        // 1. Inicializar si hay parámetros
+        if (urlParams.length > 1) {
+            frame.src = `https://vdo.ninja/${urlParams}&motiondetection&api=1`;
+            frame.style.display = "block";
+            setupMsg.style.display = "none";
+        }
+
+        // 2. Control del botón de Sonido
+        btnSound.onclick = () => {
+            soundEnabled = !soundEnabled;
+            if (soundEnabled) {
+                btnSound.innerText = "🔊 Sonido: ON";
+                btnSound.className = "btn-on";
+                // Reproducimos un silencio breve para "desbloquear" el audio en el navegador
+                audio.play().then(() => { audio.pause(); audio.currentTime = 0; });
+            } else {
+                btnSound.innerText = "🔈 Sonido: OFF";
+                btnSound.className = "btn-off";
+            }
+        };
+
+        // 3. Control de Notificaciones
+        btnNotify.onclick = () => {
+            Notification.requestPermission().then(perm => {
+                if(perm === "granted") {
+                    btnNotify.innerText = "🔔 Notificaciones Listas";
+                    btnNotify.disabled = true;
+                    btnNotify.style.opacity = "0.5";
+                }
+            });
+        };
+
+        // 4. Lógica de Detección de Movimiento
+        window.addEventListener('message', function(e) {
+            if (e.data.action === 'motion') {
+                const now = Date.now();
+
+                // Efecto visual
+                frame.classList.add('alert-active');
+                setTimeout(() => frame.classList.remove('alert-active'), 1000);
+
+                // Sonido (si está activado)
+                if (soundEnabled) {
+                    audio.play().catch(err => console.log("Error al reproducir audio:", err));
+                }
+
+                // Notificación (máximo 1 cada 15 seg)
+                if (Notification.permission === "granted" && (now - lastAlert > 15000)) {
+                    new Notification("🚨 MOVIMIENTO DETECTADO", {
+                        body: "Actividad en el monitor VDO.ninja",
+                        icon: "https://vdo.ninja/icon.png"
+                    });
+                    lastAlert = now;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
